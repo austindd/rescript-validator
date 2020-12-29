@@ -1,0 +1,11 @@
+{
+  "name": "rescript-validator",
+  "version": "0.0.1",
+  "sources": {
+    "dir" : "src",
+    "subdirs" : true
+  },
+  "warnings": {
+    "error" : "+101"
+  }
+}
