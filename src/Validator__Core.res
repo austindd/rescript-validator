@@ -116,94 +116,92 @@ module Impl = {
     }
   }
 
-  %%private(
-    let rec __evalSync = (report, validator, value) =>
-      switch validator {
-      | Validator({name, validate}) =>
-        switch validate(value) {
-        | Pass =>
-          let _ = report.passed->Js.Array2.push(name)
-          Pass
-        | Fail(e) as error =>
-          let _ = report.failed->Js.Array2.push({name: name, value: value, message: e})
-          error
-        }
-      | NOT({name, a: Validator({name: vName, validate})}) =>
-        switch validate(value) {
-        | Pass =>
-          let message = Msg.Not.passedButNegated(~name=vName, ~value)
-          let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-          Fail(message)
-        | Fail(_) =>
-          let _ = report.passed->Js.Array2.push(name)
-          Pass
-        }
-      | NOT({name, a: NOT({a: innerValidator})}) =>
-        switch __evalSync(report, innerValidator, value) {
-        | Pass =>
-          let _ = report.passed->Js.Array2.push(name)
-          Pass
-        | Fail(_) =>
-          let message = Msg.Not.doubleNegated(~name=getName(innerValidator), ~value)
-          let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-          Fail(message)
-        }
-      | NOT({name, a}) =>
-        switch __evalSync(report, a, value) {
-        | Pass =>
-          let message = Msg.Not.passedButNegated(~name=getName(a), ~value)
-          let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-          Fail(message)
-        | Fail(_) =>
-          let _ = report.passed->Js.Array2.push(name)
-          Pass
-        }
-      | AND({name, a, b}) =>
-        switch (__evalSync(report, a, value), __evalSync(report, b, value)) {
-        | (Pass, Pass) =>
-          let _ = report.passed->Js.Array2.push(name)
-          Pass
-        | (Fail(_), Fail(_)) =>
-          let message = Msg.And.neitherLeftNorRight(~left=getName(a), ~right=getName(b), ~value)
-          let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-          Fail(message)
-        | (Pass, Fail(_)) =>
-          let message = Msg.And.leftButNotRight(~left=getName(a), ~right=getName(b), ~value)
-          let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-          Fail(message)
-        | (Fail(_), Pass) =>
-          let message = Msg.And.rightButNotLeft(~left=getName(a), ~right=getName(b), ~value)
-          let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-          Fail(message)
-        }
-      | OR({name, a, b}) =>
-        switch (__evalSync(report, a, value), __evalSync(report, b, value)) {
-        | (Pass, _)
-        | (_, Pass) =>
-          let _ = report.passed->Js.Array2.push(name)
-          Pass
-        | (Fail(_), Fail(_)) =>
-          let message = Msg.Or.neitherLeftNorRight(~left=getName(a), ~right=getName(b), ~value)
-          let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-          Fail(message)
-        }
-      | XOR({name, a, b}) =>
-        switch (__evalSync(report, a, value), __evalSync(report, b, value)) {
-        | (Pass, Fail(_))
-        | (Fail(_), Pass) =>
-          let _ = report.passed->Js.Array2.push(name)
-          Pass
-        | (Pass, Pass) =>
-          let message = Msg.Xor.passedLeftAndRight(~left=getName(a), ~right=getName(b), ~value)
-          let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-          Fail(message)
-        | (Fail(_), Fail(_)) =>
-          let message = Msg.Xor.failedLeftAndRight(~left=getName(a), ~right=getName(b), ~value)
-          let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-          Fail(message)
-        }
+  let rec __evalSync = (report, validator, value) =>
+    switch validator {
+    | Validator({name, validate}) =>
+      switch validate(value) {
+      | Pass =>
+        let _ = report.passed->Js.Array2.push(name)
+        Pass
+      | Fail(e) as error =>
+        let _ = report.failed->Js.Array2.push({name: name, value: value, message: e})
+        error
       }
-  )
+    | NOT({name, a: Validator({name: vName, validate})}) =>
+      switch validate(value) {
+      | Pass =>
+        let message = Msg.Not.passedButNegated(~name=vName, ~value)
+        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
+        Fail(message)
+      | Fail(_) =>
+        let _ = report.passed->Js.Array2.push(name)
+        Pass
+      }
+    | NOT({name, a: NOT({a: innerValidator})}) =>
+      switch __evalSync(report, innerValidator, value) {
+      | Pass =>
+        let _ = report.passed->Js.Array2.push(name)
+        Pass
+      | Fail(_) =>
+        let message = Msg.Not.doubleNegated(~name=getName(innerValidator), ~value)
+        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
+        Fail(message)
+      }
+    | NOT({name, a}) =>
+      switch __evalSync(report, a, value) {
+      | Pass =>
+        let message = Msg.Not.passedButNegated(~name=getName(a), ~value)
+        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
+        Fail(message)
+      | Fail(_) =>
+        let _ = report.passed->Js.Array2.push(name)
+        Pass
+      }
+    | AND({name, a, b}) =>
+      switch (__evalSync(report, a, value), __evalSync(report, b, value)) {
+      | (Pass, Pass) =>
+        let _ = report.passed->Js.Array2.push(name)
+        Pass
+      | (Fail(_), Fail(_)) =>
+        let message = Msg.And.neitherLeftNorRight(~left=getName(a), ~right=getName(b), ~value)
+        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
+        Fail(message)
+      | (Pass, Fail(_)) =>
+        let message = Msg.And.leftButNotRight(~left=getName(a), ~right=getName(b), ~value)
+        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
+        Fail(message)
+      | (Fail(_), Pass) =>
+        let message = Msg.And.rightButNotLeft(~left=getName(a), ~right=getName(b), ~value)
+        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
+        Fail(message)
+      }
+    | OR({name, a, b}) =>
+      switch (__evalSync(report, a, value), __evalSync(report, b, value)) {
+      | (Pass, _)
+      | (_, Pass) =>
+        let _ = report.passed->Js.Array2.push(name)
+        Pass
+      | (Fail(_), Fail(_)) =>
+        let message = Msg.Or.neitherLeftNorRight(~left=getName(a), ~right=getName(b), ~value)
+        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
+        Fail(message)
+      }
+    | XOR({name, a, b}) =>
+      switch (__evalSync(report, a, value), __evalSync(report, b, value)) {
+      | (Pass, Fail(_))
+      | (Fail(_), Pass) =>
+        let _ = report.passed->Js.Array2.push(name)
+        Pass
+      | (Pass, Pass) =>
+        let message = Msg.Xor.passedLeftAndRight(~left=getName(a), ~right=getName(b), ~value)
+        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
+        Fail(message)
+      | (Fail(_), Fail(_)) =>
+        let message = Msg.Xor.failedLeftAndRight(~left=getName(a), ~right=getName(b), ~value)
+        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
+        Fail(message)
+      }
+    }
 
   let evalSync = (validator, value) => {
     let mutReport = {

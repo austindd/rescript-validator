@@ -30,6 +30,18 @@ module Impl = {
       | _ => Fail(j`Expected some variation of "Hello World", but got "$str" instead`)
       },
   })
+
+  let emailRegex = %re(
+    "/^(([^<>()\[\]\\.,;:\s@\"]+(\.[^<>()\[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/"
+  )
+
+  let isEmail = make({
+    name: "isEmail",
+    validate: str =>
+      Js.Re.test_(emailRegex, str)
+        ? Pass
+        : Fail(j`Expected input to be a valid email address, but got ${str}`),
+  })
 }
 
 include Impl

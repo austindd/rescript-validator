@@ -3,7 +3,7 @@ open! Validator__StringValidators
 
 let myValidator = {
   open! Infix
-  (!shorterThan(3) && !longerThan(24)) || isHelloWorld
+  (!shorterThan(100) && !longerThan(5)) || isHelloWorld || isEmail
 }
 
 Js.log2("Validator:", myValidator)
