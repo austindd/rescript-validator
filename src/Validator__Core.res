@@ -5,13 +5,13 @@ module Impl = {
     message: string,
   }
 
-  type validation =
+  type passOrFail =
     | Pass
     | Fail(string)
 
   type definition<'a> = {
     name: string,
-    validate: 'a => validation,
+    validate: 'a => passOrFail,
   }
 
   type rec t<'a> =
