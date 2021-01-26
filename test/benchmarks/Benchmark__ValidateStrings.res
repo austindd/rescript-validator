@@ -21,14 +21,28 @@ let isLongerThan_1_2_3_4 = {
 }
 
 suite
-->Suite.add("isLongerThan(1) && isLongerThan(2) && isLongerThan(3) && isLongerThan(4)", (. ()) => {
-  open Validator__Core
+->Suite.add(
+  "isLongerThan(1) && isLongerThan(2) && isLongerThan(3) && isLongerThan(4) - PASSING",
+  (. ()) => {
+    open Validator__Core
 
-  resultRef :=
-    Some({
-      validate(isLongerThan_1_2_3_4, "Hello")
-    })
-})
+    resultRef :=
+      Some({
+        validate(isLongerThan_1_2_3_4, "Hello")
+      })
+  },
+)
+->Suite.add(
+  "isLongerThan(1) && isLongerThan(2) && isLongerThan(3) && isLongerThan(4) - FAILING",
+  (. ()) => {
+    open Validator__Core
+
+    resultRef :=
+      Some({
+        validate(isLongerThan_1_2_3_4, "abc")
+      })
+  },
+)
 ->Suite.run
 ->Suite.toArray
 ->Belt.Array.forEach(benchmark => Benchmark.toString(benchmark)->Js.log)
