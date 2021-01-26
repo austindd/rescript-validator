@@ -1,25 +1,26 @@
 module Impl = {
-  type error<'a> = {
-    name: string,
-    value: 'a,
-    message: string,
-  }
-
-  type passOrFail =
-    | Pass
-    | Fail(string)
-
-  type definition<'a> = {
-    name: string,
-    validate: 'a => passOrFail,
-  }
+  type passOrFail = Pass | Fail(option<string>)
 
   type rec t<'a> =
-    | Validator(definition<'a>)
+    | Validator({name: string, validate: (. 'a) => bool, message: (. 'a) => string})
     | AND({name: string, a: t<'a>, b: t<'a>})
     | OR({name: string, a: t<'a>, b: t<'a>})
     | XOR({name: string, a: t<'a>, b: t<'a>})
     | NOT({name: string, a: t<'a>})
+
+  let defaultErrorMessage = (
+    type a,
+    ~stringify: option<(. a) => string>,
+    ~name: string,
+    ~value: a,
+  ) => {
+    let valueString = switch stringify {
+    | None => j`$value`
+    | Some(toString) => toString(. value)
+    }
+
+    j`Invalid value "$valueString" passed to "$name"`
+  }
 
   let getName = validator =>
     switch validator {
@@ -30,7 +31,7 @@ module Impl = {
     | NOT({name}) => name
     }
 
-  let rename: (t<'a>, string) => t<'a> = (validator, name) =>
+  let updateName: (t<'a>, string) => t<'a> = (validator, name) =>
     switch validator {
     | Validator(x) => Validator({...x, name: name})
     | AND(x) => AND({...x, name: name})
@@ -41,190 +42,231 @@ module Impl = {
 
   let notName = a => {
     let name = getName(a)
-    j`NOT[$name]`
+    j`NOT[ $name ]`
   }
   let andName = (a, b) => {
     let nameA = getName(a)
     let nameB = getName(b)
-    j`AND[$nameA,$nameB]`
+    j`AND[ $nameA, $nameB ]`
   }
   let orName = (a, b) => {
     let nameA = getName(a)
     let nameB = getName(b)
-    j`OR[$nameA,$nameB]`
+    j`OR[ $nameA, $nameB ]`
   }
   let xorName = (a, b) => {
     let nameA = getName(a)
     let nameB = getName(b)
-    j`XOR[$nameA,$nameB]`
+    j`XOR[ $nameA, $nameB ]`
   }
 
-  type report<'a> = {
+  type error<'a> = {
     value: 'a,
-    name: string,
-    isValid: bool,
-    passed: array<string>,
-    failed: array<error<'a>>,
+    validator: t<'a>,
+    validatorName: string,
+    message: string,
   }
 
-  type mutReport<'a> = {
+  type errorReport<'a> = {
     value: 'a,
-    name: string,
-    mutable isValid: bool,
-    passed: array<string>,
-    failed: array<error<'a>>,
+    validatorName: string,
+    validator: t<'a>,
+    errors: array<error<'a>>,
   }
 
-  external sealReport: mutReport<'a> => report<'a> = "%identity"
-  external editReport: report<'a> => mutReport<'a> = "%identity"
+  let make: (~name: string, ~message: (. 'a) => string=?, (. 'a) => bool) => t<'a> = (
+    ~name,
+    ~message=?,
+    validate,
+  ) => Validator({
+    name: name,
+    validate: validate,
+    message: switch message {
+    | None => (. value) => defaultErrorMessage(~name, ~stringify=None, ~value)
+    | Some(m) => m
+    },
+  })
 
-  let make: definition<'a> => t<'a> = v => Validator(v)
   let and_: (t<'a>, t<'a>) => t<'a> = (a, b) => AND({name: andName(a, b), a: a, b: b})
   let or_: (t<'a>, t<'a>) => t<'a> = (a, b) => OR({name: orName(a, b), a: a, b: b})
   let xor: (t<'a>, t<'a>) => t<'a> = (a, b) => XOR({name: xorName(a, b), a: a, b: b})
   let not_: t<'a> => t<'a> = a => NOT({name: notName(a), a: a})
-
-  module Msg = {
-    module Not = {
-      let passedButNegated = (~name: string, ~value: 'a) =>
-        j`NOT[$name]: The input value "$value" passed "$name", but was negated by the "NOT" operator.`
-      let failedButNegated = (~name: string, ~value: 'a) =>
-        j`NOT[$name]: The input value "$value" failed "$name", but was negated by the "NOT" operator.`
-      let doubleNegated = (~name: string, ~value: 'a) =>
-        j`NOT[NOT[$name]]: The input value "$value" failed "$name", and was negated twice by the "NOT" operator.`
-    }
-
-    module And = {
-      let leftButNotRight = (~left: string, ~right: string, ~value) =>
-        j`AND[$left,$right]: The input value "$value" passed "$left" but failed "$right". `
-      let rightButNotLeft = (~left: string, ~right: string, ~value) =>
-        j`AND[$left,$right]: The input value "$value" passed "$right" but failed "$left". `
-      let neitherLeftNorRight = (~left: string, ~right: string, ~value) =>
-        j`AND[$left,$right]: The input value "$value" failed both "$left" and "$right".`
-    }
-
-    module Or = {
-      let neitherLeftNorRight = (~left: string, ~right: string, ~value) =>
-        j`OR[$left,$right]: The input value "$value" failed both "$left" and "$right".`
-    }
-
-    module Xor = {
-      let passedLeftAndRight = (~left: string, ~right: string, ~value) =>
-        j`XOR[$left,$right]: The input value "$value" passed both "$left" and "$right".`
-      let failedLeftAndRight = (~left: string, ~right: string, ~value) =>
-        j`XOR[$left,$right]: The input value "$value" failed both "$left" and "$right".`
-    }
-  }
-
-  let rec __evalSync = (report, validator, value) =>
-    switch validator {
-    | Validator({name, validate}) =>
-      switch validate(value) {
-      | Pass =>
-        let _ = report.passed->Js.Array2.push(name)
-        Pass
-      | Fail(e) as error =>
-        let _ = report.failed->Js.Array2.push({name: name, value: value, message: e})
-        error
-      }
-    | NOT({name, a: Validator({name: vName, validate})}) =>
-      switch validate(value) {
-      | Pass =>
-        let message = Msg.Not.passedButNegated(~name=vName, ~value)
-        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-        Fail(message)
-      | Fail(_) =>
-        let _ = report.passed->Js.Array2.push(name)
-        Pass
-      }
-    | NOT({name, a: NOT({a: innerValidator})}) =>
-      switch __evalSync(report, innerValidator, value) {
-      | Pass =>
-        let _ = report.passed->Js.Array2.push(name)
-        Pass
-      | Fail(_) =>
-        let message = Msg.Not.doubleNegated(~name=getName(innerValidator), ~value)
-        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-        Fail(message)
-      }
-    | NOT({name, a}) =>
-      switch __evalSync(report, a, value) {
-      | Pass =>
-        let message = Msg.Not.passedButNegated(~name=getName(a), ~value)
-        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-        Fail(message)
-      | Fail(_) =>
-        let _ = report.passed->Js.Array2.push(name)
-        Pass
-      }
-    | AND({name, a, b}) =>
-      switch (__evalSync(report, a, value), __evalSync(report, b, value)) {
-      | (Pass, Pass) =>
-        let _ = report.passed->Js.Array2.push(name)
-        Pass
-      | (Fail(_), Fail(_)) =>
-        let message = Msg.And.neitherLeftNorRight(~left=getName(a), ~right=getName(b), ~value)
-        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-        Fail(message)
-      | (Pass, Fail(_)) =>
-        let message = Msg.And.leftButNotRight(~left=getName(a), ~right=getName(b), ~value)
-        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-        Fail(message)
-      | (Fail(_), Pass) =>
-        let message = Msg.And.rightButNotLeft(~left=getName(a), ~right=getName(b), ~value)
-        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-        Fail(message)
-      }
-    | OR({name, a, b}) =>
-      switch (__evalSync(report, a, value), __evalSync(report, b, value)) {
-      | (Pass, _)
-      | (_, Pass) =>
-        let _ = report.passed->Js.Array2.push(name)
-        Pass
-      | (Fail(_), Fail(_)) =>
-        let message = Msg.Or.neitherLeftNorRight(~left=getName(a), ~right=getName(b), ~value)
-        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-        Fail(message)
-      }
-    | XOR({name, a, b}) =>
-      switch (__evalSync(report, a, value), __evalSync(report, b, value)) {
-      | (Pass, Fail(_))
-      | (Fail(_), Pass) =>
-        let _ = report.passed->Js.Array2.push(name)
-        Pass
-      | (Pass, Pass) =>
-        let message = Msg.Xor.passedLeftAndRight(~left=getName(a), ~right=getName(b), ~value)
-        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-        Fail(message)
-      | (Fail(_), Fail(_)) =>
-        let message = Msg.Xor.failedLeftAndRight(~left=getName(a), ~right=getName(b), ~value)
-        let _ = report.failed->Js.Array2.push({name: name, value: value, message: message})
-        Fail(message)
-      }
-    }
-
-  let evalSync = (validator, value) => {
-    let mutReport = {
-      name: getName(validator),
-      value: value,
-      isValid: true,
-      passed: [],
-      failed: [],
-    }
-    let result = __evalSync(mutReport, validator, value)
-    switch result {
-    | Pass => Ok(sealReport(mutReport))
-    | Fail(_) =>
-      mutReport.isValid = false
-      Error(sealReport(mutReport))
-    }
-  }
 
   module Infix = {
     let \"&&" = and_
     let \"||" = or_
     let \"^^" = xor
     let not = not_
+  }
+
+  let _makeError: (~stringify: option<(. 'a) => string>, t<'a>, 'a) => error<'a> = (
+    ~stringify,
+    validator,
+    value,
+  ) =>
+    switch validator {
+    | Validator({name, message}) => {
+        value: value,
+        validatorName: name,
+        validator: validator,
+        message: message(. value),
+      }
+    | AND({name})
+    | OR({name})
+    | XOR({name})
+    | NOT({name}) => {
+        value: value,
+        validator: validator,
+        validatorName: name,
+        message: defaultErrorMessage(~stringify, ~name, ~value),
+      }
+    }
+
+  let rec _evalSync = (validator: t<'a>, errStackRef: ref<array<t<'a>>>, value: 'a) => {
+    let errStack = errStackRef.contents
+    let errStackLength = Belt.Array.length(errStack)
+
+    switch validator {
+    | Validator({validate}) =>
+      switch validate(. value) {
+      | true => true
+      | false =>
+        let _ = errStack->Js.Array2.push(validator)
+        false
+      }
+    | NOT({a: Validator({validate})}) =>
+      switch validate(. value) {
+      | false =>
+        if errStackLength > 0 {
+          errStackRef := []
+        }
+        true
+      | true =>
+        let _ = errStack->Js.Array2.push(validator)
+        false
+      }
+    | NOT({a: NOT({a: x})}) => _evalSync(x, errStackRef, value)
+    | NOT({a}) =>
+      switch _evalSync(a, errStackRef, value) {
+      | false =>
+        if errStackLength > 0 {
+          errStackRef := []
+        }
+        true
+      | true =>
+        let _ = errStack->Js.Array2.push(validator)
+        false
+      }
+    | AND({a, b}) =>
+      switch _evalSync(a, errStackRef, value) {
+      | false =>
+        let _ = errStack->Js.Array2.push(validator)
+        false
+      | true =>
+        switch _evalSync(b, errStackRef, value) {
+        | false =>
+          let _ = errStack->Js.Array2.push(validator)
+          false
+        | true =>
+          if errStackLength > 0 {
+            errStackRef := []
+          }
+          true
+        }
+      }
+    | OR({a, b}) =>
+      switch _evalSync(a, errStackRef, value) {
+      | true =>
+        if errStackLength > 0 {
+          errStackRef := []
+        }
+        true
+      | false =>
+        switch _evalSync(b, errStackRef, value) {
+        | true =>
+          if errStackLength > 0 {
+            errStackRef := []
+          }
+          true
+        | false =>
+          let _ = errStack->Js.Array2.push(validator)
+          false
+        }
+      }
+    | XOR({a, b}) =>
+      switch (_evalSync(a, errStackRef, value), _evalSync(b, errStackRef, value)) {
+      | (true, false) =>
+        if errStackLength > 0 {
+          errStackRef := []
+        }
+        true
+      | (false, true) =>
+        if errStackLength > 0 {
+          errStackRef := []
+        }
+        true
+      | (false, false) =>
+        let _ = errStack->Js.Array2.push(validator)
+        false
+      | (true, true) =>
+        let _ = errStack->Js.Array2.push(validator)
+        false
+      }
+    }
+  }
+
+  let validate = (~stringify=?, validator, value) => {
+    open Belt
+    let errStackRef = ref([])
+    let errors = []
+    let result = _evalSync(validator, errStackRef, value)
+    switch result {
+    | true => Ok(value)
+    | false =>
+      let errStack = errStackRef.contents
+      errStack->Array.forEachU((. v) => {
+        let _ = errors->Js.Array2.push(_makeError(~stringify, v, value))
+      })
+      Error({
+        value: value,
+        validator: validator,
+        validatorName: getName(validator),
+        errors: errors,
+      })
+    }
+  }
+
+  type rec async<'a> =
+    | Validator_Async({
+        name: string,
+        validate: 'a => Js.Promise.t<bool>,
+        message: option<'a => string>,
+      })
+    | AND_Async({name: string, a: async<'a>, b: async<'a>})
+    | OR_Async({name: string, a: async<'a>, b: async<'a>})
+    | XOR_Async({name: string, a: async<'a>, b: async<'a>})
+    | NOT_Async({name: string, a: async<'a>})
+
+  module Async = {
+    type t<'a> = async<'a>
+
+    let getName = validator =>
+      switch validator {
+      | Validator_Async({name})
+      | AND_Async({name})
+      | OR_Async({name})
+      | XOR_Async({name})
+      | NOT_Async({name}) => name
+      }
+
+    let rename: (t<'a>, string) => t<'a> = (validator, name) =>
+      switch validator {
+      | Validator_Async(x) => Validator_Async({...x, name: name})
+      | AND_Async(x) => AND_Async({...x, name: name})
+      | OR_Async(x) => OR_Async({...x, name: name})
+      | XOR_Async(x) => XOR_Async({...x, name: name})
+      | NOT_Async(x) => NOT_Async({...x, name: name})
+      }
   }
 }
 

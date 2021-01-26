@@ -1,47 +1,51 @@
 module Impl = {
   open Validator__Core
+  
+  %%private(let _stringify = (. x) => string_of_int(x));
 
-  let greaterThan = (n: int) => {
+  let isGreaterThan = (n: int) => {
     let nStr = string_of_int(n)
-    make({
-      name: j`greaterThan(${nStr})`,
-      validate: value => {
-        let valueStr = string_of_int(value)
-        value > n ? Pass : Fail(j`Expected an integer greater than ${nStr}, but got ${valueStr}`)
+    let name = j`greaterThan(${nStr})`
+    make(
+      ~name,
+      ~message=(. value) => defaultErrorMessage(~stringify=Some(_stringify), ~name, ~value),
+      (. value) => {
+        value > n
       },
-    })
+    )
   }
 
-  let lessThan = (n: int) => {
+  let isLessThan = (n: int) => {
     let nStr = string_of_int(n)
-    make({
-      name: j`lessThan(${nStr})`,
-      validate: value => {
-        let valueStr = string_of_int(value)
-        value < n ? Pass : Fail(j`Expected an integer less than ${nStr}, but got ${valueStr}`)
+    let name = j`isLessThan(${nStr})`
+    make(
+      ~name,
+      ~message=(. value) => defaultErrorMessage(~stringify=Some(_stringify), ~name, ~value),
+      (. value) => {
+        value < n
       },
-    })
+    )
   }
 
-  let multipleOf = (n: int) => {
+  let isMultipleOf = (n: int) => {
     let nStr = string_of_int(n)
-    make({
-      name: j`multipleOf(${nStr})`,
-      validate: value => {
+    let name = j`isMultipleOf(${nStr})`
+    make(
+      ~name,
+      ~message=(. value) => defaultErrorMessage(~stringify=Some(_stringify), ~name, ~value),
+      (. value) => {
         if n === 0 {
           if value === 0 {
-            Pass
+            true
           } else {
-            let valueStr = string_of_int(value)
-            Fail(j`Expected an integer that is a multiple of ${nStr}, but got ${valueStr}`)
+            false
           }
         } else {
-          let valueStr = string_of_int(value)
           mod(value, n) === 0
-            ? Pass
-            : Fail(j`Expected an integer that is a multiple of ${nStr}, but got ${valueStr}`)
         }
       },
-    })
+    )
   }
 }
+
+include Impl

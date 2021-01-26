@@ -3,22 +3,20 @@ open! Validator__StringValidators
 
 let myValidator = {
   open! Infix
-  (!shorterThan(100) && !longerThan(5)) || isHelloWorld || isEmail
+  // (!isShorterThan(100) && !isLongerThan(5)) || isHelloWorld || isEmail
+  isLongerThan(10) || isLongerThan(11) || isLongerThan(12)
 }
 
 Js.log2("Validator:", myValidator)
-let result = evalSync(myValidator, "Hi")
+
+let result = validate(myValidator, "Hello")
+
 Js.log2("Result:", result)
+
 switch result {
-| Ok({passed, failed}) =>
-  Js.log("PASSED")
-  Array.iter(Js.log, passed)
-  Js.log("FAILED")
-  Array.iter(Js.log, failed)
-| Error({passed, failed}) =>
-  Js.log("PASSED")
-  Array.iter(Js.log, passed)
-  Js.log("FAILED")
-  Array.iter(Js.log, failed)
+| Ok(value) =>
+  Js.log(value)
+| Error(report) =>
+  Js.log(report)
 }
 
