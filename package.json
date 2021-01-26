@@ -15,6 +15,7 @@
     "clean-start": "npx bsb -clean-world && npx bsb -make-world -w"
   },
   "devDependencies": {
-    "bs-platform": "^8.3.0"
+    "bs-platform": "^8.3.0",
+    "rescript-benchmarkjs": "^1.0.0"
   }
 }
