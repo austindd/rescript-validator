@@ -8,7 +8,7 @@ module Impl = {
     | XOR({name: string, a: t<'a>, b: t<'a>})
     | NOT({name: string, a: t<'a>})
 
-  let makeDefaultErrorMessage = (
+  let defaultErrorMessage = (
     type a,
     ~stringify: option<(. a) => string>,
     ~name: string,
@@ -82,7 +82,7 @@ module Impl = {
     name: name,
     validate: validate,
     message: switch message {
-    | None => (. value) => makeDefaultErrorMessage(~name, ~stringify=None, ~value)
+    | None => (. value) => defaultErrorMessage(~name, ~stringify=None, ~value)
     | Some(m) => m
     },
   })
@@ -118,7 +118,7 @@ module Impl = {
         value: value,
         validator: validator,
         validatorName: name,
-        message: makeDefaultErrorMessage(~stringify, ~name, ~value),
+        message: defaultErrorMessage(~stringify, ~name, ~value),
       }
     }
 
@@ -215,7 +215,7 @@ module Impl = {
     }
   }
 
-  let validate = (~valueToString=?, validator, value) => {
+  let validate = (~stringify=?, validator, value) => {
     open Belt
     let errStackRef = ref([])
     let errors = []
@@ -225,7 +225,7 @@ module Impl = {
     | false =>
       let errStack = errStackRef.contents
       errStack->Array.forEachU((. v) => {
-        let _ = errors->Js.Array2.push(_makeError(~stringify=valueToString, v, value))
+        let _ = errors->Js.Array2.push(_makeError(~stringify, v, value))
       })
       Error({
         value: value,
