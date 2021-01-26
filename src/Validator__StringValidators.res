@@ -10,7 +10,7 @@ module Impl = {
   let longerThan = (length: int) =>
     make({
       name: j`longerThan($length)`,
-      validate: str => Js.String.length(str) < length ? Pass : Fail(""),
+      validate: str => Js.String.length(str) > length ? Pass : Fail(""),
     })
 
   let isHelloWorld = make({

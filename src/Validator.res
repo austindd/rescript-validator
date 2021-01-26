@@ -21,3 +21,4 @@ switch result {
   Js.log("FAILED")
   Array.iter(Js.log, failed)
 }
+
