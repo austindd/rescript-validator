@@ -92,6 +92,11 @@ module Impl = {
   let xor: (t<'a>, t<'a>) => t<'a> = (a, b) => XOR({name: xorName(a, b), a: a, b: b})
   let not_: t<'a> => t<'a> = a => NOT({name: notName(a), a: a})
 
+  let andU: (. t<'a>, t<'a>) => t<'a> = (. a, b) => AND({name: andName(a, b), a: a, b: b})
+  let orU: (. t<'a>, t<'a>) => t<'a> = (. a, b) => OR({name: orName(a, b), a: a, b: b})
+  let xorU: (. t<'a>, t<'a>) => t<'a> = (. a, b) => XOR({name: xorName(a, b), a: a, b: b})
+  let notU: (. t<'a>) => t<'a> = (. a) => NOT({name: notName(a), a: a})
+
   module Infix = {
     let \"&&" = and_
     let \"||" = or_
@@ -123,52 +128,52 @@ module Impl = {
     }
 
   let rec _evalSync = (validator: t<'a>, errStackRef: ref<array<t<'a>>>, value: 'a) => {
+    open Belt
     let errStack = errStackRef.contents
-    let errStackLength = Belt.Array.length(errStack)
 
     switch validator {
     | Validator({validate}) =>
       switch validate(. value) {
       | true => true
       | false =>
-        let _ = errStack->Js.Array2.push(validator)
+        let _ = Belt.Array.setUnsafe(errStack, Belt.Array.length(errStack), validator)
         false
       }
     | NOT({a: Validator({validate})}) =>
       switch validate(. value) {
       | false =>
-        if errStackLength > 0 {
+        if Array.length(errStack) > 0 {
           errStackRef := []
         }
         true
       | true =>
-        let _ = errStack->Js.Array2.push(validator)
+        let _ = Array.setUnsafe(errStack, Array.length(errStack), validator)
         false
       }
     | NOT({a: NOT({a: x})}) => _evalSync(x, errStackRef, value)
     | NOT({a}) =>
       switch _evalSync(a, errStackRef, value) {
       | false =>
-        if errStackLength > 0 {
+        if Array.length(errStack) > 0 {
           errStackRef := []
         }
         true
       | true =>
-        let _ = errStack->Js.Array2.push(validator)
+        let _ = Belt.Array.setUnsafe(errStack, Array.length(errStack), validator)
         false
       }
     | AND({a, b}) =>
       switch _evalSync(a, errStackRef, value) {
       | false =>
-        let _ = errStack->Js.Array2.push(validator)
+        let _ = Belt.Array.setUnsafe(errStack, Array.length(errStack), validator)
         false
       | true =>
         switch _evalSync(b, errStackRef, value) {
         | false =>
-          let _ = errStack->Js.Array2.push(validator)
+          let _ = Belt.Array.setUnsafe(errStack, Array.length(errStack), validator)
           false
         | true =>
-          if errStackLength > 0 {
+          if Array.length(errStack) > 0 {
             errStackRef := []
           }
           true
@@ -177,39 +182,39 @@ module Impl = {
     | OR({a, b}) =>
       switch _evalSync(a, errStackRef, value) {
       | true =>
-        if errStackLength > 0 {
+        if Array.length(errStack) > 0 {
           errStackRef := []
         }
         true
       | false =>
         switch _evalSync(b, errStackRef, value) {
         | true =>
-          if errStackLength > 0 {
+          if Array.length(errStack) > 0 {
             errStackRef := []
           }
           true
         | false =>
-          let _ = errStack->Js.Array2.push(validator)
+          let _ = Belt.Array.setUnsafe(errStack, Array.length(errStack), validator)
           false
         }
       }
     | XOR({a, b}) =>
       switch (_evalSync(a, errStackRef, value), _evalSync(b, errStackRef, value)) {
       | (true, false) =>
-        if errStackLength > 0 {
+        if Array.length(errStack) > 0 {
           errStackRef := []
         }
         true
       | (false, true) =>
-        if errStackLength > 0 {
+        if Array.length(errStack) > 0 {
           errStackRef := []
         }
         true
       | (false, false) =>
-        let _ = errStack->Js.Array2.push(validator)
+        let _ = Belt.Array.setUnsafe(errStack, Array.length(errStack), validator)
         false
       | (true, true) =>
-        let _ = errStack->Js.Array2.push(validator)
+        let _ = Belt.Array.setUnsafe(errStack, Array.length(errStack), validator)
         false
       }
     }
@@ -224,9 +229,18 @@ module Impl = {
     | true => Ok(value)
     | false =>
       let errStack = errStackRef.contents
-      errStack->Array.forEachU((. v) => {
-        let _ = errors->Js.Array2.push(_makeError(~stringify, v, value))
-      })
+      let errorsIndexRef = ref(0)
+
+      let () = for i in 0 to Array.length(errStack) - 1 {
+        let errorsIndex = errorsIndexRef.contents
+
+        switch Belt.Array.get(errStack, i) {
+        | None => ()
+        | Some(v) =>
+          let _ = Belt.Array.setUnsafe(errors, errorsIndex, _makeError(~stringify, v, value))
+          incr(errorsIndexRef)
+        }
+      }
       Error({
         value: value,
         validator: validator,

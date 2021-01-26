@@ -11,12 +11,12 @@ Js.log2("Validator:", myValidator)
 
 let result = validate(myValidator, "Hello")
 
-Js.log2("Result:", result)
+// Js.log2("Result:", result)
 
 switch result {
 | Ok(value) =>
   Js.log(value)
 | Error(report) =>
-  Js.log(report)
+  Js.log(report.errors)
 }
 
