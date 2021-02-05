@@ -8,11 +8,11 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "start": "npx bsb -make-world -w",
+    "dev": "npx bsb -make-world -w",
     "build": "npx bsb -make-world",
     "clean": "npx bsb -clean-world",
     "clean-build": "npx bsb -clean-world && npx bsb -make-world",
-    "clean-start": "npx bsb -clean-world && npx bsb -make-world -w"
+    "clean-dev": "npx bsb -clean-world && npx bsb -make-world -w"
   },
   "devDependencies": {
     "bs-platform": "^8.3.0",

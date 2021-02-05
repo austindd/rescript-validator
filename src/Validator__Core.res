@@ -223,11 +223,11 @@ module Impl = {
   let validate = (~stringify=?, validator, value) => {
     open Belt
     let errStackRef = ref([])
-    let errors = []
     let result = _evalSync(validator, errStackRef, value)
     switch result {
     | true => Ok(value)
     | false =>
+      let errors = []
       let errStack = errStackRef.contents
       let errorsIndexRef = ref(0)
 
