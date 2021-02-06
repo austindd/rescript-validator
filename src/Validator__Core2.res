@@ -1,8 +1,9 @@
 module Impl = {
+
   type rec t<'a> =
     | Validator({name: string, validate: (. 'a) => bool, message: (. 'a) => string})
-    | AND({name: string, left: t<'a>, right: t<'a>})
-    | OR({name: string, left: t<'a>, right: t<'a>})
+    | AND({name: string, left: t<'a>, right: array<t<'a>>})
+    | OR({name: string, left: t<'a>, right: array<t<'a>>})
     | XOR({name: string, left: t<'a>, right: t<'a>})
     | NOT({name: string, right: t<'a>})
 
@@ -110,16 +111,74 @@ module Impl = {
     },
   })
 
-  let and_: (t<'a>, t<'a>) => t<'a> = (left, right) => AND({
-    name: andName(left, right),
-    left: left,
-    right: right,
-  })
-  let or_: (t<'a>, t<'a>) => t<'a> = (left, right) => OR({
-    name: orName(left, right),
-    left: left,
-    right: right,
-  })
+  let and_: (t<'a>, t<'a>) => t<'a> = (left, right) => {
+    open Belt
+    switch left {
+    | AND({left: l1, right: r1}) =>
+      let arr = Array.sliceToEnd(r1, 0)
+      switch right {
+      | AND({left: l2, right: r2}) =>
+        let r2Length = Array.length(r2);
+        let _ = arr->Js.Array2.push(l2)
+        for i in 0 to r2Length - 1 {
+          let _ = arr->Js.Array2.push(Array.getUnsafe(r2, i))
+        }
+        AND({
+          name: andName(left, right),
+          left: l1,
+          right: arr,
+        })
+      | _ =>
+        let _ = arr->Js.Array2.push(right)
+        AND({
+          name: andName(left, right),
+          left: l1,
+          right: arr,
+        })
+      }
+    | _ =>
+      AND({
+        name: andName(left, right),
+        left: left,
+        right: [right],
+      })
+    }
+  }
+
+  let or_: (t<'a>, t<'a>) => t<'a> = (left, right) => {
+    open Belt
+    switch left {
+    | OR({left: l1, right: r1}) =>
+      let arr = Array.sliceToEnd(r1, 0)
+      switch right {
+      | OR({left: l2, right: r2}) =>
+        let r2Length = Array.length(r2);
+        let _ = arr->Js.Array2.push(l2)
+        for i in 0 to r2Length - 1 {
+          let _ = arr->Js.Array2.push(Array.getUnsafe(r2, i))
+        }
+        OR({
+          name: orName(left, right),
+          left: l1,
+          right: arr,
+        })
+      | _ =>
+        let _ = arr->Js.Array2.push(right)
+        OR({
+          name: orName(left, right),
+          left: l1,
+          right: arr,
+        })
+      }
+    | _ =>
+      OR({
+        name: orName(left, right),
+        left: left,
+        right: [right],
+      })
+    }
+  }
+
   let xor: (t<'a>, t<'a>) => t<'a> = (left, right) => XOR({
     name: xorName(left, right),
     left: left,
@@ -127,21 +186,80 @@ module Impl = {
   })
   let not_: t<'a> => t<'a> = right => NOT({name: notName(right), right: right})
 
-  let andU: (. t<'a>, t<'a>) => t<'a> = (. left, right) => AND({
-    name: andName(left, right),
-    left: left,
-    right: right,
-  })
-  let orU: (. t<'a>, t<'a>) => t<'a> = (. left, right) => OR({
-    name: orName(left, right),
-    left: left,
-    right: right,
-  })
+  let andU: (. t<'a>, t<'a>) => t<'a> = (. left, right) => {
+    open Belt
+    switch left {
+    | AND({left: l1, right: r1}) =>
+      let arr = Array.sliceToEnd(r1, 0)
+      switch right {
+      | AND({left: l2, right: r2}) =>
+        let r2Length = Array.length(r2);
+        let _ = arr->Js.Array2.push(l2)
+        for i in 0 to r2Length - 1 {
+          let _ = arr->Js.Array2.push(Array.getUnsafe(r2, i))
+        }
+        AND({
+          name: andName(left, right),
+          left: l1,
+          right: arr,
+        })
+      | _ =>
+        let _ = arr->Js.Array2.push(right)
+        AND({
+          name: andName(left, right),
+          left: l1,
+          right: arr,
+        })
+      }
+    | _ =>
+      AND({
+        name: andName(left, right),
+        left: left,
+        right: [right],
+      })
+    }
+  }
+
+  let orU: (. t<'a>, t<'a>) => t<'a> = (. left, right) => {
+    open Belt
+    switch left {
+    | OR({left: l1, right: r1}) =>
+      let arr = Belt.Array.sliceToEnd(r1, 0)
+      switch right {
+      | OR({left: l2, right: r2}) =>
+        let r2Length = Array.length(r2);
+        let _ = arr->Js.Array2.push(l2)
+        for i in 0 to r2Length - 1 {
+          let _ = arr->Js.Array2.push(Array.getUnsafe(r2, i))
+        }
+        OR({
+          name: orName(left, right),
+          left: l1,
+          right: arr,
+        })
+      | _ =>
+        let _ = arr->Js.Array2.push(right)
+        OR({
+          name: orName(left, right),
+          left: l1,
+          right: arr,
+        })
+      }
+    | _ =>
+      OR({
+        name: orName(left, right),
+        left: left,
+        right: [right],
+      })
+    }
+  }
+
   let xorU: (. t<'a>, t<'a>) => t<'a> = (. left, right) => XOR({
     name: xorName(left, right),
     left: left,
     right: right,
   })
+
   let notU: (. t<'a>) => t<'a> = (. right) => NOT({name: notName(right), right: right})
 
   module Infix = {
@@ -231,7 +349,7 @@ module Impl = {
         Js.Dict.set(resultsDict, name, false)
         false
       | true =>
-        switch _evalSync(resultsDict, errStackRef, value, right) {
+        switch _ANDArrayEval(resultsDict, errStackRef, value, right) {
         | false =>
           let _ = Belt.Array.setUnsafe(errStack, Array.length(errStack), validator)
           Js.Dict.set(resultsDict, name, false)
@@ -253,7 +371,7 @@ module Impl = {
         Js.Dict.set(resultsDict, name, true)
         true
       | false =>
-        switch _evalSync(resultsDict, errStackRef, value, right) {
+        switch _ORArrayEval(resultsDict, errStackRef, value, right) {
         | true =>
           if Array.length(errStack) > 0 {
             errStackRef := []
@@ -295,6 +413,32 @@ module Impl = {
     }
   }
 
+  and _ANDArrayEval = (resultsDict, errStackRef, value, validatorArray) => {
+    open Belt
+    let len = Array.length(validatorArray)
+    let result = ref(true)
+    for i in 0 to len - 1 {
+      let current = _evalSync(resultsDict, errStackRef, value, Array.getUnsafe(validatorArray, i))
+      if current === false {
+        result := false
+      }
+    }
+    result.contents
+  }
+
+  and _ORArrayEval = (resultsDict, errStackRef, value, validatorArray) => {
+    open Belt
+    let len = Array.length(validatorArray)
+    let result = ref(false)
+    for i in 0 to len - 1 {
+      let current = _evalSync(resultsDict, errStackRef, value, Array.getUnsafe(validatorArray, i))
+      if current === true {
+        result := true
+      }
+    }
+    result.contents
+  }
+
   let validate: (~stringify: (. 'a) => string=?, t<'a>, 'a) => result<report<'a>, report<'a>> = (
     ~stringify=?,
     validator,
@@ -303,8 +447,8 @@ module Impl = {
     open Belt
     let name = getName(validator)
     let errStackRef = ref([])
-    let resultsDict = Js.Dict.empty()
-    let result = _evalSync(resultsDict, errStackRef, value, validator)
+    let boolMap = Js.Dict.empty()
+    let result = _evalSync(boolMap, errStackRef, value, validator)
     switch result {
     | true =>
       Ok({
@@ -314,7 +458,7 @@ module Impl = {
         errors: [],
         errorMap: Js.Dict.empty(),
         resultTree: None,
-        boolMap: Js.Dict.empty(),
+        boolMap: boolMap,
       })
     | false =>
       let (errorsArray, errorsDict) = ([], Js.Dict.empty())
@@ -341,7 +485,7 @@ module Impl = {
         errors: errorsArray,
         errorMap: errorsDict,
         resultTree: None,
-        boolMap: resultsDict,
+        boolMap: boolMap,
       })
     }
   }

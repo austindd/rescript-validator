@@ -1,8 +1,8 @@
 open Jest
 open Expect
 
-module Core = Validator__Core
-module StringValidators = Validator__StringValidators
+module Core = Validator__Core2
+module StringValidators = Validator__StringValidators2
 
 module Utils = {
   let _isValid = validationResult =>
@@ -15,7 +15,7 @@ module Utils = {
     open Core
     switch validationResult {
     | Ok(_) => None
-    | Error(report) => Js.Dict.get(report.errorsDict, name)
+    | Error(report) => Js.Dict.get(report.errorMap, name)
     }
   }
 
@@ -33,6 +33,21 @@ module Utils = {
     | None => false
     | Some(_error) => true
     }
+
+  let _didPass_byName = (validationResult, name) => {
+    open Core
+    switch validationResult {
+    | Ok(report) | Error(report) =>
+      switch Js.Dict.get(report.boolMap, name) {
+      | None => false
+      | Some(b) => b
+      }
+    }
+  }
+
+  let _didPass = (validationResult, validator) => {
+    _didPass_byName(validationResult, Core.getName(validator))
+  }
 
   let _allTrue = boolArray => Belt.Array.everyU(boolArray, (. item) => item)
 }
@@ -96,9 +111,9 @@ describe("'AND' Operator", () => {
     let passed = Core.validate(validator, "123")
 
     let result = (
-      _errorExists(failed_left, left) === true,
-      _errorExists(failed_right, right) === true,
-      _errorExists(passed, validator) === false,
+      _didPass(failed_left, left) === false,
+      _didPass(failed_right, right) === false,
+      _didPass(passed, validator) === true,
     )
 
     let expected = (true, true, true)
@@ -120,9 +135,9 @@ describe("'OR' Operator", () => {
     let v1_leftErr_rightOk = Core.validate(v1, "123456")
 
     let v1_result = (
-      v1_leftErr_rightErr->_errorExists(v1) === true,
-      v1_leftErr_rightOk->_errorExists(v1_left) === true,
-      v1_leftOk_rightErr->_errorExists(v1_right) === true,
+      v1_leftErr_rightErr->_didPass(v1) === false,
+      v1_leftErr_rightOk->_didPass(v1_left) === false,
+      v1_leftOk_rightErr->_didPass(v1_right) === false,
     )
 
     let v2_left = isLongerThan_2
@@ -134,9 +149,9 @@ describe("'OR' Operator", () => {
     let v2_leftOk_rightOk = Core.validate(v2, "1234")
 
     let v2_result = (
-      v2_leftErr_rightOk->_errorExists(v2_left) === true,
-      v2_leftOk_rightErr->_errorExists(v2_right) === true,
-      v2_leftOk_rightOk->_errorExists(v2) === false,
+      v2_leftErr_rightOk->_didPass(v2_left) === false,
+      v2_leftOk_rightErr->_didPass(v2_right) === false,
+      v2_leftOk_rightOk->_didPass(v2) === true,
     )
 
     let result = (v1_result, v2_result)

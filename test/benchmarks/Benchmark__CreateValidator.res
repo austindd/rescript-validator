@@ -16,8 +16,8 @@ let validatorRef = ref(None)
 
 suite
 ->Suite.add("isLongerThan(1) && isLongerThan(2) && isLongerThan(3) && isLongerThan(4)", (. ()) => {
-  open Validator__Core
-  open Validator__StringValidators
+  open Validator__Core2
+  open Validator__StringValidators2
 
   validatorRef :=
     Some({

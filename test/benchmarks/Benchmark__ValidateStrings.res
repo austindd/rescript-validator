@@ -14,8 +14,8 @@ let suite = Suite.make(
 
 let resultRef = ref(None)
 let isLongerThan_1_2_3_4 = {
-  open Validator__Core
-  open Validator__StringValidators
+  open Validator__Core2
+  open Validator__StringValidators2
   open! Infix
   isLongerThan(1) && isLongerThan(2) && isLongerThan(3) && isLongerThan(4)
 }
@@ -24,7 +24,7 @@ suite
 ->Suite.add(
   "isLongerThan(1) && isLongerThan(2) && isLongerThan(3) && isLongerThan(4) - PASSING",
   (. ()) => {
-    open Validator__Core
+    open Validator__Core2
 
     resultRef :=
       Some({
@@ -35,7 +35,7 @@ suite
 ->Suite.add(
   "isLongerThan(1) && isLongerThan(2) && isLongerThan(3) && isLongerThan(4) - FAILING",
   (. ()) => {
-    open Validator__Core
+    open Validator__Core2
 
     resultRef :=
       Some({
