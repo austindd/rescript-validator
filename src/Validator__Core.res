@@ -61,7 +61,7 @@ module Impl = {
   type error<'a> = {
     value: 'a,
     validator: t<'a>,
-    validatorName: string,
+    name: string,
     message: string,
   }
 
@@ -89,7 +89,7 @@ module Impl = {
 
   type report<'a> = {
     value: 'a,
-    validatorName: string,
+    name: string,
     validator: t<'a>,
     errorsArray: array<error<'a>>,
     errorsDict: Js.Dict.t<error<'a>>,
@@ -134,7 +134,7 @@ module Impl = {
     switch validator {
     | Validator({name, message}) => {
         value: value,
-        validatorName: name,
+        name: name,
         validator: validator,
         message: message(. value),
       }
@@ -144,114 +144,152 @@ module Impl = {
     | NOT({name}) => {
         value: value,
         validator: validator,
-        validatorName: name,
+        name: name,
         message: defaultErrorMessage(~stringify, ~name, ~value),
       }
     }
 
-  let rec _evalSync = (errStackRef: ref<array<t<'a>>>, value: 'a, validator: t<'a>) => {
+  let rec _evalSync = (
+    resultsDict: Js.Dict.t<bool>,
+    errStackRef: ref<array<t<'a>>>,
+    value: 'a,
+    validator: t<'a>,
+  ) => {
     open Belt
     let errStack = errStackRef.contents
 
     switch validator {
-    | Validator({validate}) =>
+    | Validator({name, validate}) =>
       switch validate(. value) {
-      | true => true
+      | true =>
+        Js.Dict.set(resultsDict, name, true)
+        true
       | false =>
+        Js.Dict.set(resultsDict, name, false)
         let _ = Belt.Array.setUnsafe(errStack, Belt.Array.length(errStack), validator)
         false
       }
-    | NOT({a: Validator({validate})}) =>
+    | NOT({name, a: Validator({validate})}) =>
       switch validate(. value) {
       | false =>
         if Array.length(errStack) > 0 {
           errStackRef := []
         }
+        Js.Dict.set(resultsDict, name, true)
         true
       | true =>
         let _ = Array.setUnsafe(errStack, Array.length(errStack), validator)
+        Js.Dict.set(resultsDict, name, false)
         false
       }
-    | NOT({a: NOT({a: x})}) => _evalSync(errStackRef, value, x)
-    | NOT({a}) =>
-      switch _evalSync(errStackRef, value, a) {
+    | NOT({name, a: NOT({a: x})}) =>
+      let res = _evalSync(resultsDict, errStackRef, value, x)
+      Js.Dict.set(resultsDict, name, res)
+      res
+    | NOT({name, a}) =>
+      switch _evalSync(resultsDict, errStackRef, value, a) {
       | false =>
         if Array.length(errStack) > 0 {
           errStackRef := []
         }
+        Js.Dict.set(resultsDict, name, true)
         true
       | true =>
         let _ = Belt.Array.setUnsafe(errStack, Array.length(errStack), validator)
+        Js.Dict.set(resultsDict, name, false)
         false
       }
-    | AND({a, b}) =>
-      switch _evalSync(errStackRef, value, a) {
+    | AND({name, a, b}) =>
+      switch _evalSync(resultsDict, errStackRef, value, a) {
       | false =>
         let _ = Belt.Array.setUnsafe(errStack, Array.length(errStack), validator)
+        Js.Dict.set(resultsDict, name, false)
         false
       | true =>
-        switch _evalSync(errStackRef, value, b) {
+        switch _evalSync(resultsDict, errStackRef, value, b) {
         | false =>
           let _ = Belt.Array.setUnsafe(errStack, Array.length(errStack), validator)
+          Js.Dict.set(resultsDict, name, false)
           false
         | true =>
           if Array.length(errStack) > 0 {
             errStackRef := []
           }
+          Js.Dict.set(resultsDict, name, true)
           true
         }
       }
-    | OR({a, b}) =>
-      switch _evalSync(errStackRef, value, a) {
+    | OR({name, a, b}) =>
+      switch _evalSync(resultsDict, errStackRef, value, a) {
       | true =>
         if Array.length(errStack) > 0 {
           errStackRef := []
         }
+        Js.Dict.set(resultsDict, name, true)
         true
       | false =>
-        switch _evalSync(errStackRef, value, b) {
+        switch _evalSync(resultsDict, errStackRef, value, b) {
         | true =>
           if Array.length(errStack) > 0 {
             errStackRef := []
           }
+          Js.Dict.set(resultsDict, name, true)
           true
         | false =>
           let _ = Belt.Array.setUnsafe(errStack, Array.length(errStack), validator)
+          Js.Dict.set(resultsDict, name, false)
           false
         }
       }
-    | XOR({a, b}) =>
-      switch (_evalSync(errStackRef, value, a), _evalSync(errStackRef, value, b)) {
+    | XOR({name, a, b}) =>
+      switch (
+        _evalSync(resultsDict, errStackRef, value, a),
+        _evalSync(resultsDict, errStackRef, value, b),
+      ) {
       | (true, false) =>
         if Array.length(errStack) > 0 {
           errStackRef := []
         }
+        Js.Dict.set(resultsDict, name, true)
         true
       | (false, true) =>
         if Array.length(errStack) > 0 {
           errStackRef := []
         }
+        Js.Dict.set(resultsDict, name, true)
         true
       | (false, false) =>
         let _ = Belt.Array.setUnsafe(errStack, Array.length(errStack), validator)
+        Js.Dict.set(resultsDict, name, false)
         false
       | (true, true) =>
         let _ = Belt.Array.setUnsafe(errStack, Array.length(errStack), validator)
+        Js.Dict.set(resultsDict, name, false)
         false
       }
     }
   }
 
-  let validate: (~stringify: (. 'a) => string=?, t<'a>, 'a) => result<'a, report<'a>> = (
+  let validate: (~stringify: (. 'a) => string=?, t<'a>, 'a) => result<report<'a>, report<'a>> = (
     ~stringify=?,
     validator,
     value,
   ) => {
     open Belt
+    let name = getName(validator)
     let errStackRef = ref([])
-    let result = _evalSync(errStackRef, value, validator)
+    let resultsDict = Js.Dict.empty()
+    let result = _evalSync(resultsDict, errStackRef, value, validator)
     switch result {
-    | true => Ok(value)
+    | true =>
+      Ok({
+        value: value,
+        validator: validator,
+        name: name,
+        errorsArray: [],
+        errorsDict: Js.Dict.empty(),
+        resultTree: None,
+      })
     | false =>
       let (errorsArray, errorsDict) = ([], Js.Dict.empty())
 
@@ -273,7 +311,7 @@ module Impl = {
       Error({
         value: value,
         validator: validator,
-        validatorName: getName(validator),
+        name: name,
         errorsArray: errorsArray,
         errorsDict: errorsDict,
         resultTree: None,
