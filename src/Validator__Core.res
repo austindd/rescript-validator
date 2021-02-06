@@ -1,6 +1,4 @@
 module Impl = {
-  type passOrFail = Pass | Fail(option<string>)
-
   type rec t<'a> =
     | Validator({name: string, validate: (. 'a) => bool, message: (. 'a) => string})
     | AND({name: string, a: t<'a>, b: t<'a>})
@@ -67,11 +65,35 @@ module Impl = {
     message: string,
   }
 
-  type errorReport<'a> = {
+  type rec resultTree<'a> =
+    | Validator({name: string, validator: t<'a>})
+    | AndTree({
+        name: string,
+        validator: t<'a>,
+        left: result<resultTree<'a>, resultTree<'a>>,
+        right: result<resultTree<'a>, resultTree<'a>>,
+      })
+    | OrTree({
+        name: string,
+        validator: t<'a>,
+        left: result<resultTree<'a>, resultTree<'a>>,
+        right: result<resultTree<'a>, resultTree<'a>>,
+      })
+    | XorTree({
+        name: string,
+        validator: t<'a>,
+        left: result<resultTree<'a>, resultTree<'a>>,
+        right: result<resultTree<'a>, resultTree<'a>>,
+      })
+    | NotTree({name: string, validator: t<'a>, right: result<resultTree<'a>, resultTree<'a>>})
+
+  type report<'a> = {
     value: 'a,
     validatorName: string,
     validator: t<'a>,
-    errors: array<error<'a>>,
+    errorsArray: array<error<'a>>,
+    errorsDict: Js.Dict.t<error<'a>>,
+    resultTree: option<resultTree<'a>>,
   }
 
   let make: (~name: string, ~message: (. 'a) => string=?, (. 'a) => bool) => t<'a> = (
@@ -127,7 +149,7 @@ module Impl = {
       }
     }
 
-  let rec _evalSync = (validator: t<'a>, errStackRef: ref<array<t<'a>>>, value: 'a) => {
+  let rec _evalSync = (errStackRef: ref<array<t<'a>>>, value: 'a, validator: t<'a>) => {
     open Belt
     let errStack = errStackRef.contents
 
@@ -150,9 +172,9 @@ module Impl = {
         let _ = Array.setUnsafe(errStack, Array.length(errStack), validator)
         false
       }
-    | NOT({a: NOT({a: x})}) => _evalSync(x, errStackRef, value)
+    | NOT({a: NOT({a: x})}) => _evalSync(errStackRef, value, x)
     | NOT({a}) =>
-      switch _evalSync(a, errStackRef, value) {
+      switch _evalSync(errStackRef, value, a) {
       | false =>
         if Array.length(errStack) > 0 {
           errStackRef := []
@@ -163,12 +185,12 @@ module Impl = {
         false
       }
     | AND({a, b}) =>
-      switch _evalSync(a, errStackRef, value) {
+      switch _evalSync(errStackRef, value, a) {
       | false =>
         let _ = Belt.Array.setUnsafe(errStack, Array.length(errStack), validator)
         false
       | true =>
-        switch _evalSync(b, errStackRef, value) {
+        switch _evalSync(errStackRef, value, b) {
         | false =>
           let _ = Belt.Array.setUnsafe(errStack, Array.length(errStack), validator)
           false
@@ -180,14 +202,14 @@ module Impl = {
         }
       }
     | OR({a, b}) =>
-      switch _evalSync(a, errStackRef, value) {
+      switch _evalSync(errStackRef, value, a) {
       | true =>
         if Array.length(errStack) > 0 {
           errStackRef := []
         }
         true
       | false =>
-        switch _evalSync(b, errStackRef, value) {
+        switch _evalSync(errStackRef, value, b) {
         | true =>
           if Array.length(errStack) > 0 {
             errStackRef := []
@@ -199,7 +221,7 @@ module Impl = {
         }
       }
     | XOR({a, b}) =>
-      switch (_evalSync(a, errStackRef, value), _evalSync(b, errStackRef, value)) {
+      switch (_evalSync(errStackRef, value, a), _evalSync(errStackRef, value, b)) {
       | (true, false) =>
         if Array.length(errStack) > 0 {
           errStackRef := []
@@ -220,14 +242,19 @@ module Impl = {
     }
   }
 
-  let validate = (~stringify=?, validator, value) => {
+  let validate: (~stringify: (. 'a) => string=?, t<'a>, 'a) => result<'a, report<'a>> = (
+    ~stringify=?,
+    validator,
+    value,
+  ) => {
     open Belt
     let errStackRef = ref([])
-    let result = _evalSync(validator, errStackRef, value)
+    let result = _evalSync(errStackRef, value, validator)
     switch result {
     | true => Ok(value)
     | false =>
-      let errors = []
+      let (errorsArray, errorsDict) = ([], Js.Dict.empty())
+
       let errStack = errStackRef.contents
       let errorsIndexRef = ref(0)
 
@@ -237,7 +264,9 @@ module Impl = {
         switch Belt.Array.get(errStack, i) {
         | None => ()
         | Some(v) =>
-          let _ = Belt.Array.setUnsafe(errors, errorsIndex, _makeError(~stringify, v, value))
+          let currentError = _makeError(~stringify, v, value)
+          let _ = Belt.Array.setUnsafe(errorsArray, errorsIndex, currentError)
+          let _ = Js.Dict.set(errorsDict, getName(v), currentError)
           incr(errorsIndexRef)
         }
       }
@@ -245,7 +274,9 @@ module Impl = {
         value: value,
         validator: validator,
         validatorName: getName(validator),
-        errors: errors,
+        errorsArray: errorsArray,
+        errorsDict: errorsDict,
+        resultTree: None,
       })
     }
   }

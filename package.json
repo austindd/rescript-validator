@@ -8,6 +8,7 @@
   "license": "MIT",
   "private": true,
   "scripts": {
+    "test": "jest",
     "dev": "npx bsb -make-world -w",
     "build": "npx bsb -make-world",
     "clean": "npx bsb -clean-world",
@@ -16,6 +17,8 @@
   },
   "devDependencies": {
     "bs-platform": "^8.3.0",
-    "rescript-benchmarkjs": "^1.0.0"
-  }
+    "rescript-benchmarkjs": "^1.0.0",
+    "@glennsl/bs-jest": "^0.6.0"
+  },
+  "dependencies": {}
 }

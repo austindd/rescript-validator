@@ -16,6 +16,7 @@
     "error": "+101"
   },
   "bs-dev-dependencies": [
-    "rescript-benchmarkjs"
+    "rescript-benchmarkjs",
+    "@glennsl/bs-jest"
   ]
 }

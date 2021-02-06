@@ -15,7 +15,7 @@ let result = validate(myValidator, "Hello")
 
 switch result {
 | Ok(value) => Js.log(value)
-| Error(report) => Js.log(report.errors)
+| Error(report) => Js.log(report.errorsArray)
 }
 
 module type F = {
