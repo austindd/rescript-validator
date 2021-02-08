@@ -161,3 +161,54 @@ describe("'OR' Operator", () => {
     expect(result) |> toEqual(expected)
   })
 })
+
+describe("'NOT' Operator", () => {
+  test("Validation errors are reported correctly", () => {
+    open Utils
+
+    let v1 = Core.not_(isLongerThan_4)
+    let v2 = Core.not_(Core.not_(isLongerThan_4))
+
+    let v1_ok = Core.validate(v1, "123")
+    let v1_err = Core.validate(v1, "123456")
+
+    let v2_ok = Core.validate(v2, "123456")
+    Js.log(v2_ok)
+    let v2_err = Core.validate(v2, "123")
+
+    let v1_result = (v1_ok->_didPass(v1) === true, v1_err->_didPass(v1) === false)
+
+    let v2_result = (v2_ok->_didPass(v2) === true, v2_err->_didPass(v2) === false)
+
+    let result = (v1_result, v2_result)
+    let expected = ((true, true), (true, true))
+
+    expect(result) |> toEqual(expected)
+  })
+})
+
+describe("'XOR' Operator", () => {
+  test("Validation errors are reported correctly", () => {
+    open Utils
+    open StringValidators
+
+    let v1 = Core.xor(containsOnlyDigits, isLongerThan_4)
+
+    let v1_leftOk_rightOk = Core.validate(v1, "123456")
+    let v1_leftErr_rightErr = Core.validate(v1, "abc")
+    let v1_leftOk_rightErr = Core.validate(v1, "123")
+    let v1_leftErr_rightOk = Core.validate(v1, "abcdef")
+
+    let v1_result = (
+      v1_leftOk_rightOk->_didPass(v1) === false,
+      v1_leftErr_rightErr->_didPass(v1) === false,
+      v1_leftOk_rightErr->_didPass(v1) === true,
+      v1_leftErr_rightOk->_didPass(v1) === true,
+    )
+
+    let result = v1_result
+    let expected = (true, true, true, true)
+
+    expect(result) |> toEqual(expected)
+  })
+})
